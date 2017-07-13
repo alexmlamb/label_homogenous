@@ -7,14 +7,19 @@ from torch.autograd import Variable, grad
 from torch import optim
 import gzip
 import cPickle as pickle
+import random
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 def init_params():
 
     params = {}
 
-    params['W1'] = Variable(0.01 * torch.randn(784,512), requires_grad=True).cuda()
-    params['W2'] = Variable(0.01 * torch.randn(512,10), requires_grad=True).cuda()
+    params['W1'] = Variable(0.01 * torch.randn(784,512).cuda(), requires_grad=True)
+    params['W2'] = Variable(0.01 * torch.randn(512,10).cuda(), requires_grad=True)
 
     return params
 
@@ -33,7 +38,9 @@ def network(p, x, ytrue):
 
     loss = nll(y, ytrue).sum()
 
-    return loss
+    acc = ytrue.eq(y.max(1)[1]).sum()
+
+    return loss, acc
 
 if __name__ == "__main__":
     mn = gzip.open("/u/lambalex/data/mnist/mnist.pkl.gz")
@@ -44,16 +51,49 @@ if __name__ == "__main__":
     validx,validy = valid
     testx, testy = test
 
-    x = trainx[0:64]
-    y = trainy[0:64]
-
-    print x.shape
-
     p = init_params()
 
-    loss = network(p,x,y)
+    optimizer = optim.Adam([p['W1'], p['W2']], lr = 0.001, betas=(0.9,0.999))
 
-    print loss
+    accl = []
 
+    mode = "diff"
+    #mode = "same"
+    
 
+    for i in range(0,50000):
+
+        optimizer.zero_grad()
+
+        if mode == "diff":
+
+            rind = random.randint(0,40000)
+
+            x = trainx[rind:rind+64]
+            y = trainy[rind:rind+64]
+
+        elif mode == "same":
+
+            rclass = random.randint(0,9)
+            rind = random.randint(0,4500)
+
+            x = trainx[trainy==rclass][rind:rind+64].astype('float32')
+            y = trainy[trainy==rclass][rind:rind+64]
+
+        loss,acc = network(p,x,y)
+
+        loss.backward()
+
+        optimizer.step()
+
+        accl.append(acc.data.cpu().numpy())
+
+        if i % 100 == 0:
+            print loss
+            print acc
+            print np.array(accl[:-200]).mean()
+            
+
+    plt.plot(accl) 
+    plt.savefig(mode + '.png')
 
